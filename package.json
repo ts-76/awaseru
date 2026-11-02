@@ -24,7 +24,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
     "hono": "^4.11.9",
-    "jose": "6.2.13",
+    "jose": "6.2.14",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "zod": "^4.6.7"
