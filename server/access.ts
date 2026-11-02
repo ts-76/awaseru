@@ -4,18 +4,20 @@ import "./context";
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 
 export type AccessConfig = {
+  ACCESS_OWNER_EMAIL?: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_CREATE_AUD?: string;
   ACCESS_MCP_AUD?: string;
 };
 type Purpose = "create" | "mcp";
-const ownerEmail = "ts.createlink@gmail.com";
 const keySets = new Map<string, JWTVerifyGetKey>();
 function configuration(config: AccessConfig, purpose: Purpose) {
   const domain = config.ACCESS_TEAM_DOMAIN;
   const createAud = config.ACCESS_CREATE_AUD;
   const mcpAud = config.ACCESS_MCP_AUD;
   if (
+    !config.ACCESS_OWNER_EMAIL ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.ACCESS_OWNER_EMAIL) ||
     !domain ||
     !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.cloudflareaccess\.com$/.test(domain) ||
     !createAud ||
@@ -25,7 +27,11 @@ function configuration(config: AccessConfig, purpose: Purpose) {
     !/^[a-f0-9]{64}$/.test(mcpAud)
   )
     return null;
-  return { issuer: `https://${domain}`, audience: purpose === "create" ? createAud : mcpAud };
+  return {
+    ownerEmail: config.ACCESS_OWNER_EMAIL,
+    issuer: `https://${domain}`,
+    audience: purpose === "create" ? createAud : mcpAud,
+  };
 }
 function remoteKey(issuer: string) {
   let keys = keySets.get(issuer);
@@ -92,7 +98,7 @@ export function accessGate(config: () => AccessConfig, keys?: JWTVerifyGetKey): 
         401,
       );
     }
-    if (email !== ownerEmail)
+    if (email !== settings.ownerEmail)
       return c.json({ error: "このアカウントでは利用できません。", code: "auth_forbidden" }, 403);
     if (purpose === "create" && /^(POST|PUT|PATCH|DELETE)$/.test(c.req.method)) {
       if (c.req.header("Origin") !== new URL(c.req.url).origin)

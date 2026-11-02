@@ -2,17 +2,12 @@
 
 Cloudflare Workers / D1 上で動く日本語の日程調整ツールです。同じWorkerの `/mcp` に、公式MCP SDKのStreamable HTTPサーバーを同梱しています。Void 1.2.1、React 19、Vite+を使用します。
 
-## 公開先
+## 配置と認証
 
-- URL: https://awaseru.ts-create.workers.dev
-- MCP: https://awaseru.ts-create.workers.dev/mcp
-- Cloudflareアカウント: tsapp
-- Worker: `awaseru`（2026-10-31 に `awaseru-scheduler-20261030` から改名。旧URLは廃止）
-- D1: `awaseru-scheduler-20261030-db`
+Worker名・Cloudflareアカウント・D1参照は、各環境の `.env` またはシェルで設定します。
+作成ページ `/create`・作成API `/api/create` はCloudflare Access、MCPはManaged OAuthで `ACCESS_OWNER_EMAIL` の本人だけに制限します。共有イベント・回答・秘密キーでの管理は公開のままです。認証設定の手順は [docs/cloudflare-access.md](docs/cloudflare-access.md) にあります。
 
-作成ページ `/create`・作成API `/api/create` はCloudflare Access、MCPはManaged OAuthで本人 `ts.createlink@gmail.com` だけに制限します。共有イベント・回答・秘密キーでの管理は公開のままです。認証設定の手順は [docs/cloudflare-access.md](docs/cloudflare-access.md) にあります。
-
-認証の実装・署名fixture検査と、公開Accessの設定・本人ログイン・Codex OAuthの実接続は別の確認です。後者の結果は作業プレイブックに記録します。
+認証の実装・署名fixture検査と、公開Accessの設定・本人ログイン・Codex OAuthの実接続は別の確認です。
 
 ## できること
 
@@ -39,9 +34,10 @@ npm run dev
 
 `http://localhost:5173` を開きます。ローカルD1のデータは `.void` / `.wrangler` の開発用ストレージへ保存されます。これらを削除するとローカルデータが失われます。
 
-`env.ts` の次の3項目を `.env` に設定します。Voidは `.env.example` を許可しないため、テンプレートファイルは置きません。
+`env.ts` の次の4項目を `.env` に設定します。Voidは `.env.example` を許可しないため、テンプレートファイルは置きません。
 
 ```ini
+ACCESS_OWNER_EMAIL=owner@example.com
 ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com
 ACCESS_CREATE_AUD=作成専用Accessアプリの64文字AUD
 ACCESS_MCP_AUD=MCP専用Accessアプリの64文字AUD
@@ -51,7 +47,16 @@ teamはスキームやパスを含まないホスト名です。用途ごとに�
 
 ## Cloudflareへデプロイ
 
-Cloudflareアカウントへのログインと、Worker・D1を作成できる権限が必要です。
+既存Worker・D1の識別子を `.env` またはシェルへ設定します。これらはビルド時の入力で、`env.ts` のruntime schemaには含めません。シェルは `.env` より優先します。値は全項目をそろえてください。
+
+```ini
+DEPLOY_WORKER_NAME=your-worker
+DEPLOY_ACCOUNT_ID=your-32-character-account-id
+DEPLOY_D1_NAME=your-existing-database
+DEPLOY_D1_ID=your-existing-database-uuid
+```
+
+値のないクローンでは、ローカル専用の名前・D1プレースホルダーで開発・テスト・buildできます。remote操作は設定がない場合に停止します。一部だけの設定、不正な識別子、既存 `void.lock.json` と異なる対象も停止します。Worker名を変える場合も、既存D1の名前・IDを維持してください。
 
 ```sh
 npx --no-install void cloudflare login
@@ -60,11 +65,14 @@ npm run build
 npm run deploy
 ```
 
-複数アカウントがある場合は目的のアカウントを選択してください。Voidが新規Worker・D1の作成、マイグレーション、アップロード、稼働確認を行います。初回公開時に出力されるURLと `void.lock.json` を確認し、lockファイルをGitに保管します。
+デプロイは既存対象へマイグレーションとアップロードを行うため、事前に対象を確認してください。この配布設定ではD1の自動新規作成に依存しません。別環境の導入時は先にD1を用意し、その名前・IDを設定します。
 
-本番の認証設定はVoidのserver envとして設定します。`.env` はアップロードされません。
+`.env`・`void.lock.json`・`.void-wrangler.jsonc` はGit管理しません。lockは解決後の識別子を含むため、既存環境のものを非公開でバックアップしてください。対象の不一致を回避するためにlockを無条件で消す運用は避け、設定とlockの両方を確認・復元します。空の環境でのビルドがlockを更新する可能性があります。全4項目がローカル専用プレースホルダーと一致するlockだけは、環境値の設定後に置き換えられます。実環境のlockが不一致なら、同じ非公開バックアップで復元します。生成された `dist` も環境別の設定を含み、配布ソースに含めません。Cloudflareのbuild pluginはローカルpreview用の `dist/ssr/.dev.vars` へ `.env` を複製するため、この生成物も非公開で扱います。DEPLOY値はWorker secretsやclient bundleには設定しません。
+
+本番の認証設定はVoidのserver envとして設定します。既存環境にも、次のデプロイ前に `ACCESS_OWNER_EMAIL` を本人のメールアドレスで追加してください。未設定なら保護経路は503で拒否します。issuer/subによる既存の所有者hashは変わりません。`.env` はアップロードされません。
 
 ```sh
+npx --no-install void secret put ACCESS_OWNER_EMAIL
 npx --no-install void secret put ACCESS_TEAM_DOMAIN
 npx --no-install void secret put ACCESS_CREATE_AUD
 npx --no-install void secret put ACCESS_MCP_AUD
@@ -86,7 +94,7 @@ npm run db:migrate:local
 Codexで次を実行し、開いたブラウザで許可されたCloudflareアカウントへログインします。
 
 ```sh
-codex mcp add awaseru --url https://awaseru.ts-create.workers.dev/mcp
+codex mcp add awaseru --url https://your-worker.your-subdomain.workers.dev/mcp
 codex mcp login awaseru
 ```
 

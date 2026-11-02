@@ -62,7 +62,7 @@ if (!createAssertion || !mcpAssertion) {
         method,
         redirect: "manual",
         headers: {
-          "Cf-Access-Authenticated-User-Email": "ts.createlink@gmail.com",
+          "Cf-Access-Authenticated-User-Email": "owner@example.com",
           Authorization: "Bearer obsolete-token",
         },
       });

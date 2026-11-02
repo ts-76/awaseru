@@ -25,3 +25,6 @@ notes/
 *.db
 *.pem
 *.key
+
+# Contains resolved environment-specific Cloudflare resource identifiers.
+void.lock.json

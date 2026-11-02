@@ -24,6 +24,7 @@ import { PATCH as editRoute } from "../routes/api/polls/[id]/responses/[response
 import { PATCH as stateRoute } from "../routes/api/polls/[id]/state";
 import { POST as mcpRoute } from "../routes/mcp";
 const config = {
+  ACCESS_OWNER_EMAIL: "owner@example.com",
   ACCESS_TEAM_DOMAIN: "fixture.cloudflareaccess.com",
   ACCESS_CREATE_AUD: "a".repeat(64),
   ACCESS_MCP_AUD: "b".repeat(64),
@@ -55,7 +56,7 @@ async function signed(overrides: JWTPayload = {}, key = pair.privateKey, alg = "
     iss: "https://fixture.cloudflareaccess.com",
     aud: config.ACCESS_CREATE_AUD,
     sub: "owner",
-    email: "ts.createlink@gmail.com",
+    email: "owner@example.com",
     exp: Math.floor(Date.now() / 1000) + 300,
     ...overrides,
   })
@@ -188,7 +189,7 @@ describe("Cloudflare Access origin boundary with real RSA signed fixtures", () =
   it("rejects absent JWT, spoof email header, Authorization bearer, old anonymous and authenticated endpoint; DB stays empty", async () => {
     for (const headers of [
       {},
-      { "Cf-Access-Authenticated-User-Email": "ts.createlink@gmail.com" },
+      { "Cf-Access-Authenticated-User-Email": "owner@example.com" },
       { Authorization: `Bearer ${await signed()}` },
     ] as Record<string, string>[])
       expect((await create(undefined, headers)).status).toBe(401);
@@ -251,6 +252,9 @@ describe("Cloudflare Access origin boundary with real RSA signed fixtures", () =
       {},
       { ...config, ACCESS_MCP_AUD: config.ACCESS_CREATE_AUD },
       { ...config, ACCESS_TEAM_DOMAIN: "evil.example" },
+      { ...config, ACCESS_OWNER_EMAIL: undefined },
+      { ...config, ACCESS_OWNER_EMAIL: "" },
+      { ...config, ACCESS_OWNER_EMAIL: "not-an-email" },
     ]) {
       const isolated = new Hono()
         .use(
@@ -469,7 +473,7 @@ describe("本人一覧と既存日程の帰属", () => {
       expect(
         (
           await request(path, undefined, {
-            headers: { "Cf-Access-Authenticated-User-Email": "ts.createlink@gmail.com" },
+            headers: { "Cf-Access-Authenticated-User-Email": "owner@example.com" },
           })
         ).status,
       ).toBe(401);
