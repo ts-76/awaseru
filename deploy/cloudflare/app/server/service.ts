@@ -146,11 +146,18 @@ export class SchedulingService {
       }
       after = parse(listCursorSchema, after);
     }
-    const clause = after ? " AND (p.created_at < ? OR (p.created_at = ? AND p.id < ?))" : "";
-    const statement = this.db
-      .prepare(`SELECT p.id,p.title,p.status,p.selected_slot,p.created_at,p.revision,p.slots,p.slot_ends,
-      (SELECT COUNT(*) FROM responses r WHERE r.poll_id = p.id) AS response_count
-      FROM polls p WHERE p.owner_id = ? AND p.status != 'deleted'${clause} ORDER BY p.created_at DESC,p.id DESC LIMIT 51`);
+    const statement = this.db.prepare(
+      after
+        ? `SELECT p.id,p.title,p.status,p.selected_slot,p.created_at,p.revision,p.slots,p.slot_ends,
+          (SELECT COUNT(*) FROM responses r WHERE r.poll_id = p.id) AS response_count
+          FROM polls p WHERE p.owner_id = ? AND p.status != 'deleted'
+          AND (p.created_at < ? OR (p.created_at = ? AND p.id < ?))
+          ORDER BY p.created_at DESC,p.id DESC LIMIT 51`
+        : `SELECT p.id,p.title,p.status,p.selected_slot,p.created_at,p.revision,p.slots,p.slot_ends,
+          (SELECT COUNT(*) FROM responses r WHERE r.poll_id = p.id) AS response_count
+          FROM polls p WHERE p.owner_id = ? AND p.status != 'deleted'
+          ORDER BY p.created_at DESC,p.id DESC LIMIT 51`,
+    );
     const rows = await statement
       .bind(owner, ...(after ? [after.createdAt, after.createdAt, after.id] : []))
       .all<{
