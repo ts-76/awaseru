@@ -1,0 +1,10 @@
+node_modules
+app/.void
+app/.cloudflare/
+app/.wrangler
+app/dist
+app/.void-wrangler.jsonc
+app/void.lock.json
+.env*
+.dev.vars*
+.wrangler

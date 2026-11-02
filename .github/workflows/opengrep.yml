@@ -1,0 +1,48 @@
+# 調整例: OpengrepはCIだけで実行する。端末やプロジェクトへ実行ファイルを入れない。
+# .github/workflows/へ置く前に既存のCIを確かめ、同等の検査があれば重複させない。
+# 版とSHA-256はdevのscripts/security-tools-release.json（linux-x64）と同じ値にする。
+# ルールは.harness/security/rules/、検証helperはdevのverify-security-tools.mjsを
+# .harness/security/へコピーしたものを使う。検出時の終了1は失敗のまま扱う。
+name: opengrep
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opengrep-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OPENGREP_VERSION: "1.31.0"
+      OPENGREP_SHA256: "dbbe3c2058dbe600c449a8ba22ea79a1643a6660658400090d0323a8d0d31147"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # 固定版の公式release assetを取得し、hashが一致しなければ実行しない。
+      - name: Opengrepを取得してhashを照合する
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/opengrep" \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86"
+          echo "${OPENGREP_SHA256}  $RUNNER_TEMP/opengrep" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/opengrep"
+      # 通信を遮断できること、正常例0・検出例1になることを合成データで確かめる。
+      - name: 通信遮断下でOpengrepの動作を確かめる
+        run: node .harness/security/verify-security-tools.mjs --opengrep "$RUNNER_TEMP/opengrep" --linux-sudo
+      # ネットワークを外した上で実行ユーザーへ戻し、ローカルルールだけで検査する。
+      - name: ローカルルールで検査する
+        run: |
+          mkdir -p "$RUNNER_TEMP/opengrep-cache" "$RUNNER_TEMP/opengrep-config"
+          sudo -n unshare --net -- setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups \
+            env XDG_CACHE_HOME="$RUNNER_TEMP/opengrep-cache" XDG_CONFIG_HOME="$RUNNER_TEMP/opengrep-config" \
+            "$RUNNER_TEMP/opengrep" scan \
+            --config .harness/security/rules --disable-version-check --error .

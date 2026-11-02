@@ -1,0 +1,1 @@
+ALTER TABLE `polls` ADD `slot_ends` text;
