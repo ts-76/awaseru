@@ -61,7 +61,7 @@ codex mcp login awaseru
 
 ## 手元で動かす
 
-Node.js 26とnpmを使います。Void 1.2.1、React 19、Vite+で構成しています。
+Node.js 26とnpmを使います。Void 1.5.0、React 19、Vite+で構成しています。
 
 ```sh
 npm ci --ignore-scripts

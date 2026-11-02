@@ -42,5 +42,6 @@ jobs:
       - name: ローカルルールで検査する
         run: |
           sudo -n unshare --net -- setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups \
+            env XDG_CACHE_HOME="$RUNNER_TEMP/opengrep-cache" \
             "$RUNNER_TEMP/opengrep" scan \
             --config .harness/security/rules --disable-version-check --error .

@@ -59,7 +59,7 @@ pkg.cloudflare = {
 add("package.json", JSON.stringify(pkg, null, 2) + "\n");
 add(
   ".gitignore",
-  "node_modules\napp/.void\napp/.wrangler\napp/dist\napp/.void-wrangler.jsonc\napp/void.lock.json\n.env*\n.dev.vars*\n.wrangler\n",
+  "node_modules\napp/.void\napp/.cloudflare/\napp/.wrangler\napp/dist\napp/.void-wrangler.jsonc\napp/void.lock.json\n.env*\n.dev.vars*\n.wrangler\n",
 );
 add(
   "README.md",

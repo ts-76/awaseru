@@ -80,8 +80,8 @@ try {
         "utf8",
       ),
     );
-    if (manifest.version !== "13.0.7")
-      throw new Error("Secretlint and preset must both be pinned to 13.0.7");
+    if (manifest.version !== "13.1.0")
+      throw new Error("Secretlint and preset must both be pinned to 13.1.0");
   }
   if (!wrapper) throw new Error("Network isolation is unsupported on this OS");
   stage = "network-control";
