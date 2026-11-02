@@ -41,7 +41,8 @@ jobs:
       # ネットワークを外した上で実行ユーザーへ戻し、ローカルルールだけで検査する。
       - name: ローカルルールで検査する
         run: |
+          mkdir -p "$RUNNER_TEMP/opengrep-cache" "$RUNNER_TEMP/opengrep-config"
           sudo -n unshare --net -- setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups \
-            env XDG_CACHE_HOME="$RUNNER_TEMP/opengrep-cache" \
+            env XDG_CACHE_HOME="$RUNNER_TEMP/opengrep-cache" XDG_CONFIG_HOME="$RUNNER_TEMP/opengrep-config" \
             "$RUNNER_TEMP/opengrep" scan \
             --config .harness/security/rules --disable-version-check --error .
