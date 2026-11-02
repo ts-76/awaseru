@@ -1,0 +1,25 @@
+rules:
+  - id: dev-compass-d1-sql-interpolation
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      SQL is built by inserting a value into the query text, which allows SQL injection.
+      With D1, keep placeholders in the text and pass values with prepare("... WHERE id = ?").bind(value).
+      With Drizzle, use the query builder or the sql`...${value}` template, not sql.raw().
+    pattern-either:
+      - pattern: $DB.prepare(`...${...}...`, ...)
+      - pattern: $DB.prepare("..." + $X, ...)
+      - pattern: $DB.prepare($X + "...", ...)
+      - pattern: |
+          $QUERY = `...${...}...`;
+          ...
+          $DB.prepare($QUERY, ...)
+      - pattern: |
+          $QUERY = "..." + $X;
+          ...
+          $DB.prepare($QUERY, ...)
+      - pattern: $DB.exec(`...${...}...`)
+      - pattern: $DB.exec("..." + $X)
+      - patterns:
+          - pattern: sql.raw($X)
+          - pattern-not: sql.raw("...")

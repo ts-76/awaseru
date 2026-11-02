@@ -1,0 +1,27 @@
+.harness/dev/*/notes/
+node_modules
+dist
+.void
+.wrangler
+.void-wrangler.jsonc
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+.harness/tools/
+.agents/skills/impeccable/scripts/bin/
+
+# Local agent sessions, generated reports, and event/credential working files.
+.harness/*
+!.harness/security/
+notes/
+.agents/
+.claude/
+.impeccable/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.pem
+*.key

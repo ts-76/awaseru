@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1793355816830,
+      "tag": "20261030102336_silky_imperial_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793355965951,
+      "tag": "20261030102605_big_jazinda",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793355966658,
+      "tag": "20261030102606_high_alex_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793371954820,
+      "tag": "20261030145234_overjoyed_magus",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793377621358,
+      "tag": "20261030162701_flimsy_changeling",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "source": {
+    "name": "awaseru",
+    "account_id": "934c6255d681d05e1fa9903560de8a59",
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "awaseru-scheduler-20261030-db",
+        "database_id": "19d990dd-9925-42da-86d1-c35ad40d804a",
+        "migrations_dir": "./db/migrations"
+      }
+    ],
+    "routes": [],
+    "workers_dev": true,
+    "preview_urls": true
+  },
+  "resolved": {
+    "name": "awaseru",
+    "account_id": "934c6255d681d05e1fa9903560de8a59",
+    "routes": [],
+    "workers_dev": true,
+    "preview_urls": true,
+    "compatibility_date": "2026-02-24",
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "awaseru-scheduler-20261030-db",
+        "database_id": "19d990dd-9925-42da-86d1-c35ad40d804a",
+        "migrations_dir": "./db/migrations"
+      }
+    ]
+  },
+  "text": "{\n  \"name\": \"awaseru\",\n  \"account_id\": \"934c6255d681d05e1fa9903560de8a59\",\n  \"routes\": [],\n  \"workers_dev\": true,\n  \"preview_urls\": true,\n  \"compatibility_date\": \"2026-02-24\",\n  \"d1_databases\": [\n    {\n      \"binding\": \"DB\",\n      \"database_name\": \"awaseru-scheduler-20261030-db\",\n      \"database_id\": \"19d990dd-9925-42da-86d1-c35ad40d804a\",\n      \"migrations_dir\": \"./db/migrations\"\n    }\n  ]\n}\n"
+}
