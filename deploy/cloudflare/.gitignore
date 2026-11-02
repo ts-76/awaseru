@@ -1,0 +1,9 @@
+node_modules
+app/.void
+app/.wrangler
+app/dist
+app/.void-wrangler.jsonc
+app/void.lock.json
+.env*
+.dev.vars*
+.wrangler

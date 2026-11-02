@@ -28,3 +28,6 @@ notes/
 
 # Contains resolved environment-specific Cloudflare resource identifiers.
 void.lock.json
+
+# Local writing review records (include complete drafts and machine paths).
+.yomiyasu/

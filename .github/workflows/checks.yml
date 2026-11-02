@@ -21,10 +21,12 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm run template:check
       - run: npm run typecheck
       - run: npm run fmt:check
       - run: npm run lint
       - run: npm test
+      - run: npm run template:verify
       - run: npm run build
       - run: npm run test:integration
       - name: Verify Secretlint offline with synthetic data
