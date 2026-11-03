@@ -221,6 +221,9 @@ export default function PollPage({ id }: Props) {
           <strong>
             {dateLabel(poll.selectedSlot, poll.slotEnds?.[poll.slots.indexOf(poll.selectedSlot)])}
           </strong>
+          <a className="secondary calendar-download" href={`/api/polls/${id}/calendar`} download>
+            カレンダーに追加
+          </a>
         </div>
       )}
       <section className="share-section">

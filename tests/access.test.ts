@@ -19,6 +19,7 @@ import { hash } from "../server/rules";
 import { POST as createRoute } from "../routes/api/create";
 import { POST as oldCreate } from "../routes/api/polls/index";
 import { GET as getRoute } from "../routes/api/polls/[id]";
+import { GET as calendarRoute } from "../routes/api/polls/[id]/calendar";
 import { POST as respondRoute } from "../routes/api/polls/[id]/responses/index";
 import { PATCH as editRoute } from "../routes/api/polls/[id]/responses/[responseId]";
 import { PATCH as stateRoute } from "../routes/api/polls/[id]/state";
@@ -136,12 +137,58 @@ beforeEach(() => {
   app.post("/api/polls", handler(oldCreate));
   app.get("/create", (c) => c.text("create form"));
   app.get("/api/polls/:id", handler(getRoute));
+  app.get("/api/polls/:id/calendar", handler(calendarRoute));
   app.post("/api/polls/:id/responses", handler(respondRoute));
   app.patch("/api/polls/:id/responses/:responseId", handler(editRoute));
   app.patch("/api/polls/:id/state", handler(stateRoute));
   app.all("/mcp", handler(mcpRoute));
 });
 afterEach(() => database.close());
+describe("公開カレンダーダウンロード", () => {
+  it("匿名・本人・別本人で同じ公開ICSを読み取り、状態変化と削除を再確認", async () => {
+    const token = await signed(),
+      data = body();
+    const p = await json(await create(token, {}, data));
+    const path = `/api/polls/${p.id}/calendar`;
+    expect((await request(path)).status).toBe(409);
+    database.prepare("UPDATE polls SET status='closed' WHERE id=?").run(p.id);
+    expect((await request(path)).status).toBe(409);
+    database
+      .prepare("UPDATE polls SET status='finalized',selected_slot=? WHERE id=?")
+      .run(data.slots[0], p.id);
+    const before = snapshot();
+    let previous = "";
+    for (const auth of [undefined, token, await signed({ sub: "other" })]) {
+      const result = await request(`${path}?admin=do-not-export`, auth);
+      expect(result.status).toBe(200);
+      expect(result.headers.get("Content-Type")).toBe("text/calendar; charset=utf-8");
+      expect(result.headers.get("Content-Disposition")).toBe(
+        `attachment; filename="awaseru-${p.id}.ics"`,
+      );
+      expect(result.headers.get("Cache-Control")).toBe("no-store");
+      expect(result.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      const content = (await result.text()).replace(/DTSTAMP:[^\r]+/, "DTSTAMP:ignored");
+      for (const secret of [
+        data.adminKey,
+        "admin_hash",
+        "edit_hash",
+        "owner_id",
+        "owner@example.com",
+        "do-not-export",
+      ])
+        expect(content).not.toContain(secret);
+      expect(content).not.toContain("DTEND");
+      if (previous) expect(content).toBe(previous);
+      previous = content;
+    }
+    expect(snapshot()).toBe(before);
+    database.prepare("UPDATE polls SET status='open',selected_slot=NULL WHERE id=?").run(p.id);
+    expect((await request(path)).status).toBe(409);
+    database.prepare("UPDATE polls SET status='deleted' WHERE id=?").run(p.id);
+    expect((await request(path)).status).toBe(404);
+    expect((await request(`/api/polls/${crypto.randomUUID()}/calendar`)).status).toBe(404);
+  });
+});
 describe("Cloudflare Access origin boundary with real RSA signed fixtures", () => {
   it("accepts owner creation and keeps public read/response anonymous", async () => {
     const input = body();

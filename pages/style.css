@@ -383,10 +383,19 @@ legend {
 }
 .final-date {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   margin: -8px 0 36px;
   color: var(--text);
+}
+.calendar-download {
+  margin-left: auto;
+}
+@media (max-width: 800px) {
+  .calendar-download {
+    margin-left: 0;
+  }
 }
 .final-date span {
   font-size: 13px;
