@@ -1268,7 +1268,7 @@ tbody td.answer .answer-mark {
 }
 .owned-poll-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
 }
 .delete-poll {
@@ -1650,5 +1650,27 @@ button.primary:disabled {
 @media (max-width: 560px) {
   .time-dialog {
     padding: 24px 20px;
+  }
+}
+
+.owned-poll-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 8px;
+}
+.poll-state-button {
+  white-space: nowrap;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+@media (max-width: 760px) {
+  .owned-poll-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .owned-poll-actions {
+    justify-content: flex-end;
+    padding: 0 16px 16px;
   }
 }

@@ -39,6 +39,35 @@ export default function MyPolls() {
       setDeletePending(false);
     }
   }
+  const [changing, setChanging] = useState<OwnedPoll | null>(null),
+    [statePending, setStatePending] = useState(false),
+    [stateError, setStateError] = useState("");
+  const stateDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (changing) stateDialog.current?.showModal();
+  }, [changing]);
+  async function changeState() {
+    if (!changing || statePending) return;
+    setStatePending(true);
+    setStateError("");
+    try {
+      const result = await api<{ id: string; status: string; revision: number }>(
+        `/api/create/polls/${changing.id}`,
+        "PATCH",
+        { status: changing.status === "open" ? "closed" : "open", revision: changing.revision },
+      );
+      setItems((previous) => previous.map((p) => (p.id === result.id ? { ...p, ...result } : p)));
+      setSuccess(
+        result.status === "closed" ? "回答を締め切りました。" : "回答受付を再開しました。",
+      );
+      stateDialog.current?.close();
+      setChanging(null);
+    } catch (e) {
+      setStateError((e as Error).message);
+    } finally {
+      setStatePending(false);
+    }
+  }
   const busy = useRef(false);
   const retryCursor = useRef<string | undefined>(undefined);
   async function load(after?: string) {
@@ -132,6 +161,11 @@ export default function MyPolls() {
         </div>
       )}
       {loaded && !items.length && <div className="list-empty">日程調整はまだありません</div>}
+      {success && (
+        <div className="notice success" role="status">
+          {success}
+        </div>
+      )}
       {!!items.length && (
         <ul className="owned-polls">
           {items.map((p) => (
@@ -171,26 +205,43 @@ export default function MyPolls() {
                   />
                 </svg>
               </a>
-              <button
-                type="button"
-                className="delete-poll"
-                aria-label={`${p.title}を削除`}
-                disabled={loading || claiming}
-                onClick={() => {
-                  setDeleteError("");
-                  setDeleting(p);
-                }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
+              <div className="owned-poll-actions">
+                {(p.status === "open" || p.status === "closed") && (
+                  <button
+                    type="button"
+                    className="secondary poll-state-button"
+                    aria-label={`${p.title}の${p.status === "open" ? "回答を締め切る" : "回答受付を再開"}`}
+                    disabled={loading || claiming || statePending || deletePending}
+                    onClick={() => {
+                      setStateError("");
+                      setSuccess("");
+                      setChanging(p);
+                    }}
+                  >
+                    {p.status === "open" ? "回答を締め切る" : "回答受付を再開"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="delete-poll"
+                  aria-label={`${p.title}を削除`}
+                  disabled={loading || claiming}
+                  onClick={() => {
+                    setDeleteError("");
+                    setDeleting(p);
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -209,6 +260,56 @@ export default function MyPolls() {
           さらに表示
         </button>
       )}
+      <dialog
+        ref={stateDialog}
+        className="delete-dialog"
+        aria-labelledby="state-dialog-heading"
+        onCancel={(e) => {
+          if (statePending) e.preventDefault();
+          else setChanging(null);
+        }}
+      >
+        <h2 id="state-dialog-heading">
+          {changing?.status === "open" ? "回答を締め切る" : "回答受付を再開"}
+        </h2>
+        <p className="delete-title">{changing?.title}</p>
+        <Notice error={stateError} />
+        <div className="dialog-actions">
+          <button
+            type="button"
+            className="secondary"
+            disabled={statePending}
+            onClick={() => {
+              stateDialog.current?.close();
+              setChanging(null);
+            }}
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            className="primary"
+            disabled={statePending || !!stateError}
+            onClick={() => void changeState()}
+          >
+            {statePending ? "変更中…" : changing?.status === "open" ? "締め切る" : "再開する"}
+          </button>
+        </div>
+        {stateError && (
+          <button
+            type="button"
+            className="text-button"
+            disabled={statePending}
+            onClick={() => {
+              stateDialog.current?.close();
+              setChanging(null);
+              void load();
+            }}
+          >
+            最新の一覧を確認
+          </button>
+        )}
+      </dialog>
       <dialog
         ref={deleteDialog}
         className="delete-dialog"
@@ -277,11 +378,6 @@ export default function MyPolls() {
           <button className="secondary" disabled={claiming || loading}>
             {claiming ? "追加中…" : "一覧に追加"}
           </button>
-          {success && (
-            <div className="notice success" role="status">
-              {success}
-            </div>
-          )}
         </form>
       </details>
     </main>

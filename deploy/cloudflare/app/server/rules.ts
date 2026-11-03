@@ -47,6 +47,9 @@ export const createSchema = z
     )
       ctx.addIssue({ code: "custom", message: "終了日時は同じ日の開始日時より後にしてください。" });
   });
+export const ownerStateSchema = z
+  .object({ status: z.enum(["open", "closed"]), revision: revisionSchema })
+  .strict();
 export const deleteSchema = z.object({ revision: revisionSchema }).strict();
 export const responseFields = {
   name: z.string().trim().min(1).max(40),

@@ -49,6 +49,7 @@ if (!createAssertion || !mcpAssertion) {
     "/create/connect",
     "/api/create/polls",
     "/api/create/polls/claim",
+    "/api/create/polls/" + randomUUID(),
     "/api/create/session",
     "/%63reate",
     "/api/create",
@@ -57,7 +58,7 @@ if (!createAssertion || !mcpAssertion) {
     "/mcp",
     "/mcp/",
   ]) {
-    for (const method of ["GET", "HEAD", "POST"]) {
+    for (const method of ["GET", "HEAD", "POST", "PATCH"]) {
       const r = await fetch(base + path, {
         method,
         redirect: "manual",

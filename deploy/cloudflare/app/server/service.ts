@@ -8,6 +8,7 @@ import {
   cursorSchema,
   listCursorSchema,
   deleteSchema,
+  ownerStateSchema,
   hash,
   parse,
 } from "./rules";
@@ -204,6 +205,23 @@ export class SchedulingService {
     if (!changed.meta.changes)
       throw new AppError(403, "管理リンクを確認してください。この日程調整は追加できません。");
     return { id: b.id };
+  }
+  async ownerState(id: string, input: unknown) {
+    const owner = this.owner(),
+      b = parse(ownerStateSchema, input);
+    const changed = await this.db
+      .prepare(
+        "UPDATE polls SET status=?,revision=revision+1 WHERE id=? AND owner_id=? AND revision=? AND status=? AND selected_slot IS NULL",
+      )
+      .bind(b.status, id, owner, b.revision, b.status === "closed" ? "open" : "closed")
+      .run();
+    if (!changed.meta.changes)
+      throw new AppError(
+        409,
+        "受付状態を変更できません。最新の一覧を確認してください。",
+        "state_changed",
+      );
+    return { id, status: b.status, revision: b.revision + 1 };
   }
   async delete(id: string, input: unknown) {
     const owner = this.owner(),

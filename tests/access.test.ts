@@ -12,7 +12,7 @@ vi.mock("void", () => ({
 import security from "../middleware/01.security";
 import { loader as pollLoader } from "../pages/p/[id].server";
 import { GET as listRoute } from "../routes/api/create/polls/index";
-import { DELETE as deleteRoute } from "../routes/api/create/polls/[id]";
+import { PATCH as ownerStateRoute, DELETE as deleteRoute } from "../routes/api/create/polls/[id]";
 import { POST as claimRoute } from "../routes/api/create/polls/claim";
 import { SchedulingService } from "../server/service";
 import { hash } from "../server/rules";
@@ -128,6 +128,7 @@ beforeEach(() => {
   );
   app.post("/api/create", handler(createRoute));
   app.get("/api/create/polls", handler(listRoute));
+  app.patch("/api/create/polls/:id", handler(ownerStateRoute));
   app.delete("/api/create/polls/:id", handler(deleteRoute));
   app.post("/api/create/polls/claim", handler(claimRoute));
   app.get("/create/polls", (c) => c.text("my polls"));
@@ -611,6 +612,123 @@ describe("所有者削除の実HTTP境界", () => {
     expect((await claim(p.id, input.adminKey, token)).status).toBe(403);
     expect((await create(token, {}, input)).status).toBe(404);
     expect((await remove(token)).status).toBe(409);
+    expect(snapshot()).toBe(deleted);
+  });
+});
+
+describe("所有者の締切・再開のHTTP境界", () => {
+  it("本人のみ締切と再開でき、回答も停止し、不正な更新で保存値を変えない", async () => {
+    const token = await signed(),
+      other = await signed({ sub: "other" }),
+      input = body(),
+      p = await json(await create(token, {}, input));
+    const change = (
+      auth = token,
+      data: unknown = { status: "closed", revision: 0 },
+      headers = {},
+      path = `/api/create/polls/${p.id}`,
+    ) =>
+      request(path, auth, {
+        method: "PATCH",
+        headers: {
+          Origin: "https://scheduler.example",
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        body: JSON.stringify(data),
+      });
+    const before = snapshot();
+    expect((await change("")).status).toBe(401);
+    expect((await change(other)).status).toBe(409);
+    for (const data of [
+      null,
+      [],
+      {},
+      { status: "finalized", revision: 0 },
+      { status: "closed", revision: 0, selectedSlot: input.slots[0] },
+      { status: "closed", revision: 0, ownerId: "owner" },
+    ])
+      expect((await change(token, data)).status).toBe(422);
+    for (const revision of [1, -1])
+      expect((await change(token, { status: "closed", revision })).status).toBe(
+        revision < 0 ? 422 : 409,
+      );
+    expect((await change(token, undefined, { Origin: "https://evil.example" })).status).toBe(403);
+    expect((await change(token, undefined, { "Content-Type": "text/plain" })).status).toBe(415);
+    expect(
+      (
+        await request(`/api/polls/${p.id}/state`, token, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "closed", revision: 0 }),
+        })
+      ).status,
+    ).toBe(403);
+    expect(snapshot()).toBe(before);
+    database.prepare("UPDATE polls SET owner_id=NULL WHERE id=?").run(p.id);
+    expect((await change()).status).toBe(409);
+    database
+      .prepare("UPDATE polls SET owner_id=? WHERE id=?")
+      .run(await hash(JSON.stringify(["https://fixture.cloudflareaccess.com", "owner"])), p.id);
+    const editKey = secret();
+    const saved = await json(
+      await request(`/api/polls/${p.id}/responses`, undefined, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "回答済み",
+          answers: ["yes"],
+          editKey,
+          idempotencyKey: crypto.randomUUID(),
+          pollRevision: 0,
+        }),
+      }),
+    );
+    const results = await Promise.all([change(), change()]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(await json(results.find((r) => r.status === 200)!)).toEqual({
+      id: p.id,
+      status: "closed",
+      revision: 1,
+    });
+    const r = {
+      name: "山田",
+      answers: ["yes"],
+      editKey: secret(),
+      idempotencyKey: crypto.randomUUID(),
+      pollRevision: 1,
+    };
+    expect(
+      (
+        await request(`/api/polls/${p.id}/responses`, undefined, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(r),
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await request(`/api/polls/${p.id}/responses/${saved.responseId}`, undefined, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${editKey}` },
+          body: JSON.stringify({ name: "変更", answers: ["no"], pollRevision: 1, revision: 0 }),
+        })
+      ).status,
+    ).toBe(409);
+    expect((await change(token, { status: "open", revision: 0 })).status).toBe(409);
+    expect((await change(token, { status: "open", revision: 1 })).status).toBe(200);
+    expect((await json(await request(`/api/polls/${p.id}`))).status).toBe("open");
+    database
+      .prepare("UPDATE polls SET status='finalized',selected_slot=?,revision=3 WHERE id=?")
+      .run(input.slots[0], p.id);
+    const finalized = snapshot();
+    for (const status of ["open", "closed"])
+      expect((await change(token, { status, revision: 3 })).status).toBe(409);
+    expect(snapshot()).toBe(finalized);
+    database.prepare("UPDATE polls SET status='deleted' WHERE id=?").run(p.id);
+    const deleted = snapshot();
+    expect((await change(token, { status: "open", revision: 3 })).status).toBe(409);
     expect(snapshot()).toBe(deleted);
   });
 });
