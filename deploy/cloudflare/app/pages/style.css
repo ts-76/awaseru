@@ -1270,6 +1270,7 @@ tbody td.answer .answer-mark {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  transition: background-color 150ms var(--ease-out);
 }
 .delete-poll {
   width: 44px;
@@ -1377,7 +1378,7 @@ tbody td.answer .answer-mark {
 .my-polls-heading .primary {
   flex-shrink: 0;
 }
-/* Rows bleed 16px past the text column so the hover fill has room; hairlines separate them. */
+/* Hairlines separate the rows within one shared white surface. */
 .owned-polls {
   list-style: none;
   padding: 0;
@@ -1393,7 +1394,8 @@ tbody td.answer .answer-mark {
   align-items: center;
   min-height: 116px;
   padding: 22px 16px;
-  border-radius: var(--radius-control);
+  align-self: stretch;
+  border-radius: 0;
   text-decoration: none;
   color: var(--text);
 }
@@ -1469,8 +1471,11 @@ tbody td.answer .answer-mark {
   max-width: 650px;
 }
 @media (hover: hover) and (pointer: fine) {
-  .owned-poll:hover {
+  .owned-poll-row:hover {
     background: var(--surface);
+  }
+  .owned-poll:hover h2 {
+    color: var(--main);
   }
 }
 @media (max-width: 800px) {
@@ -1557,13 +1562,13 @@ tbody td.answer .answer-mark {
 .owned-polls :focus-visible {
   outline-offset: -3px;
 }
-.owned-polls li:first-child .owned-poll {
+.owned-polls li:first-child {
   border-radius: var(--radius-card) var(--radius-card) 0 0;
 }
-.owned-polls li:last-child .owned-poll {
+.owned-polls li:last-child {
   border-radius: 0 0 var(--radius-card) var(--radius-card);
 }
-.owned-polls li:only-child .owned-poll {
+.owned-polls li:only-child {
   border-radius: var(--radius-card);
 }
 /* The claim form gets its own card so its input boundary keeps 3:1 against white. */
@@ -1664,6 +1669,41 @@ button.primary:disabled {
   min-height: 44px;
   padding: 10px 12px;
   font-size: 13px;
+  background: transparent;
+}
+/* The row owns the shared surface; focus and press still identify the exact target. */
+.owned-poll-row:focus-within {
+  background: var(--surface);
+}
+.owned-poll:focus-visible h2 {
+  color: var(--main);
+}
+.owned-poll-row:has(> .owned-poll:active) {
+  background: var(--main-tint);
+}
+.owned-poll:active h2 {
+  color: var(--main);
+}
+.owned-poll-actions .poll-state-button:active:not(:disabled) {
+  background: var(--main-tint-strong);
+}
+.owned-poll-actions .delete-poll:active:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  .owned-poll-actions .poll-state-button:hover:not(:disabled) {
+    background: var(--main-tint);
+  }
+  .owned-poll-actions .delete-poll:hover:disabled {
+    color: var(--text-muted);
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .owned-poll-row {
+    transition: none;
+  }
 }
 @media (max-width: 760px) {
   .owned-poll-row {
