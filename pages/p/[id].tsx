@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { calendarLinks } from "../../server/calendar-links";
 import type { PublicPoll } from "../../server/service";
 import type { Props } from "./[id].server";
 import {
@@ -185,6 +186,7 @@ export default function PollPage({ id }: Props) {
         )}
       </main>
     );
+  const calendar = calendarLinks(poll, origin);
   const share = `${origin}/p/${id}`,
     best = Math.max(
       0,
@@ -221,9 +223,25 @@ export default function PollPage({ id }: Props) {
           <strong>
             {dateLabel(poll.selectedSlot, poll.slotEnds?.[poll.slots.indexOf(poll.selectedSlot)])}
           </strong>
-          <a className="secondary calendar-download" href={`/api/polls/${id}/calendar`} download>
-            カレンダーに追加
-          </a>
+          {calendar && (
+            <details className="calendar-add">
+              <summary className="secondary">カレンダーに追加</summary>
+              <ul className="calendar-providers">
+                {calendar.providers.map((provider) => (
+                  <li key={provider.label}>
+                    <a href={provider.href} target="_blank" rel="noopener noreferrer">
+                      {provider.label}
+                    </a>
+                  </li>
+                ))}
+                <li>
+                  <a href={calendar.ics} download>
+                    Apple カレンダー・その他（.ics）
+                  </a>
+                </li>
+              </ul>
+            </details>
+          )}
         </div>
       )}
       <section className="share-section">

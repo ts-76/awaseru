@@ -389,11 +389,30 @@ legend {
   margin: -8px 0 36px;
   color: var(--text);
 }
-.calendar-download {
+.calendar-add {
   margin-left: auto;
+  max-width: 100%;
+}
+.calendar-add summary {
+  width: fit-content;
+  cursor: pointer;
+}
+.calendar-providers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.calendar-providers a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 800px) {
-  .calendar-download {
+  .calendar-add {
     margin-left: 0;
   }
 }
