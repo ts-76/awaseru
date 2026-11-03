@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { calendarLinks } from "../../server/calendar-links";
+import type { calendarLinks } from "../../server/calendar-links";
 import type { PublicPoll } from "../../server/service";
 import type { Props } from "./[id].server";
 import {
@@ -30,6 +30,70 @@ export default function PollPage({ id }: Props) {
     [adminMessage, setAdminMessage] = useState(""),
     [adminError, setAdminError] = useState(""),
     [armed, setArmed] = useState<"finalized" | "closed" | null>(null);
+  const [calendarAccess, setCalendarAccess] = useState<{
+    revision: number;
+    id: string;
+    requestedAdmin: string;
+    links: NonNullable<ReturnType<typeof calendarLinks>>;
+    adminKey: string;
+  } | null>(null);
+  const [calendarPending, setCalendarPending] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setCalendarAccess(null);
+    if (poll?.status !== "finalized") return;
+    const revision = poll.revision;
+    async function load() {
+      const paths = [
+        ...(admin ? [{ path: `/api/polls/${id}/calendar-links`, key: admin }] : []),
+        { path: `/api/create/polls/${id}/calendar-links`, key: "" },
+      ];
+      for (const { path, key } of paths) {
+        try {
+          const response = await fetch(path, {
+            headers: key ? { Authorization: `Bearer ${key}` } : {},
+            redirect: "error",
+          });
+          if (!response.ok) continue;
+          const links = (await response.json()) as NonNullable<ReturnType<typeof calendarLinks>>;
+          if (!cancelled)
+            setCalendarAccess({ revision, id, requestedAdmin: admin, links, adminKey: key });
+          return;
+        } catch {
+          /* Public participants never receive a login prompt. */
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, admin, poll?.revision, poll?.status]);
+  async function downloadCalendar() {
+    if (!calendarAccess) return;
+    setCalendarPending(true);
+    setError("");
+    try {
+      const response = await fetch(calendarAccess.links.ics, {
+        headers: calendarAccess.adminKey
+          ? { Authorization: `Bearer ${calendarAccess.adminKey}` }
+          : {},
+        redirect: "error",
+      });
+      if (!response.ok)
+        throw new Error("カレンダーを取得できませんでした。管理者として再読み込みしてください。");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `awaseru-${id}.ics`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setCalendarPending(false);
+    }
+  }
   const request = useRef<{ editKey: string; idempotencyKey: string } | null>(null);
   const snapshot = useRef<unknown>(null);
   const successRef = useRef<HTMLParagraphElement>(null);
@@ -186,7 +250,12 @@ export default function PollPage({ id }: Props) {
         )}
       </main>
     );
-  const calendar = calendarLinks(poll, origin);
+  const calendar =
+    calendarAccess?.revision === poll.revision &&
+    calendarAccess.id === id &&
+    calendarAccess.requestedAdmin === admin
+      ? calendarAccess.links
+      : null;
   const share = `${origin}/p/${id}`,
     best = Math.max(
       0,
@@ -235,9 +304,14 @@ export default function PollPage({ id }: Props) {
                   </li>
                 ))}
                 <li>
-                  <a href={calendar.ics} download>
-                    Apple カレンダー・その他（.ics）
-                  </a>
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={calendarPending}
+                    onClick={downloadCalendar}
+                  >
+                    {calendarPending ? "取得中…" : "Apple カレンダー・その他（.ics）"}
+                  </button>
                 </li>
               </ul>
             </details>

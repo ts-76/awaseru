@@ -105,6 +105,14 @@ export class SchedulingService {
       })),
     };
   }
+  /** Calendar exports require the event owner or its management capability. */
+  async calendarPoll(id: string, secret?: string): Promise<PublicPoll> {
+    const p = await this.poll(id);
+    const owner = this.ownerId && p.owner_id === this.ownerId;
+    if (!owner && (!secret || p.admin_hash !== (await hash(secret))))
+      throw new AppError(403, "カレンダーの追加は管理者のみ利用できます。");
+    return this.get(id);
+  }
   async create(input: unknown) {
     const owner = this.owner();
     const b = parse(createSchema, input),

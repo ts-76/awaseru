@@ -405,7 +405,8 @@ legend {
   margin: 8px 0 0;
   padding: 0;
 }
-.calendar-providers a {
+.calendar-providers a,
+.calendar-providers button {
   display: inline-flex;
   align-items: center;
   min-height: 44px;

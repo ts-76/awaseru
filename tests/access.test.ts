@@ -19,6 +19,9 @@ import { hash } from "../server/rules";
 import { POST as createRoute } from "../routes/api/create";
 import { POST as oldCreate } from "../routes/api/polls/index";
 import { GET as getRoute } from "../routes/api/polls/[id]";
+import { GET as calendarLinksRoute } from "../routes/api/polls/[id]/calendar-links";
+import { GET as ownerCalendarRoute } from "../routes/api/create/polls/[id]/calendar";
+import { GET as ownerCalendarLinksRoute } from "../routes/api/create/polls/[id]/calendar-links";
 import { GET as calendarRoute } from "../routes/api/polls/[id]/calendar";
 import { POST as respondRoute } from "../routes/api/polls/[id]/responses/index";
 import { PATCH as editRoute } from "../routes/api/polls/[id]/responses/[responseId]";
@@ -138,55 +141,82 @@ beforeEach(() => {
   app.get("/create", (c) => c.text("create form"));
   app.get("/api/polls/:id", handler(getRoute));
   app.get("/api/polls/:id/calendar", handler(calendarRoute));
+  app.get("/api/polls/:id/calendar-links", handler(calendarLinksRoute));
+  app.get("/api/create/polls/:id/calendar", handler(ownerCalendarRoute));
+  app.get("/api/create/polls/:id/calendar-links", handler(ownerCalendarLinksRoute));
   app.post("/api/polls/:id/responses", handler(respondRoute));
   app.patch("/api/polls/:id/responses/:responseId", handler(editRoute));
   app.patch("/api/polls/:id/state", handler(stateRoute));
   app.all("/mcp", handler(mcpRoute));
 });
 afterEach(() => database.close());
-describe("公開カレンダーダウンロード", () => {
-  it("匿名・本人・別本人で同じ公開ICSを読み取り、状態変化と削除を再確認", async () => {
+describe("管理者限定カレンダー", () => {
+  it("匿名・偽装・別所有者を拒否し、管理キーと本人だけにリンク/ICSを提供する", async () => {
     const token = await signed(),
-      data = body();
+      other = await signed({ sub: "other" }),
+      data = { ...body(), slotEnds: ["2026-11-01T13:00:00+09:00"] };
     const p = await json(await create(token, {}, data));
-    const path = `/api/polls/${p.id}/calendar`;
-    expect((await request(path)).status).toBe(409);
-    database.prepare("UPDATE polls SET status='closed' WHERE id=?").run(p.id);
-    expect((await request(path)).status).toBe(409);
+    const path = `/api/polls/${p.id}/calendar`,
+      owned = `/api/create/polls/${p.id}/calendar`;
+    const headers = { Authorization: `Bearer ${data.adminKey}` };
+    for (const suffix of ["", "-links"]) {
+      expect((await request(path + suffix, undefined, { headers })).status).toBe(409);
+      expect((await request(owned + suffix, token)).status).toBe(409);
+    }
     database
       .prepare("UPDATE polls SET status='finalized',selected_slot=? WHERE id=?")
       .run(data.slots[0], p.id);
     const before = snapshot();
-    let previous = "";
-    for (const auth of [undefined, token, await signed({ sub: "other" })]) {
-      const result = await request(`${path}?admin=do-not-export`, auth);
-      expect(result.status).toBe(200);
-      expect(result.headers.get("Content-Type")).toBe("text/calendar; charset=utf-8");
-      expect(result.headers.get("Content-Disposition")).toBe(
-        `attachment; filename="awaseru-${p.id}.ics"`,
-      );
-      expect(result.headers.get("Cache-Control")).toBe("no-store");
-      expect(result.headers.get("X-Content-Type-Options")).toBe("nosniff");
-      const content = (await result.text()).replace(/DTSTAMP:[^\r]+/, "DTSTAMP:ignored");
-      for (const secret of [
-        data.adminKey,
-        "admin_hash",
-        "edit_hash",
-        "owner_id",
-        "owner@example.com",
-        "do-not-export",
-      ])
-        expect(content).not.toContain(secret);
-      expect(content).not.toContain("DTEND");
-      if (previous) expect(content).toBe(previous);
-      previous = content;
+    for (const suffix of ["", "-links"]) {
+      expect((await request(path + suffix)).status).toBe(403);
+      expect((await request(path + suffix, token)).status).toBe(403);
+      expect(
+        (
+          await request(path + suffix + `?admin=${data.adminKey}`, undefined, {
+            headers: { "Cf-Access-Authenticated-User-Email": "owner@example.com" },
+          })
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await request(path + suffix, undefined, {
+            headers: { Authorization: `Bearer ${secret()}` },
+          })
+        ).status,
+      ).toBe(403);
+      expect((await request(owned + suffix)).status).toBe(401);
+      expect((await request(owned + suffix, other, { headers })).status).toBe(403);
+      for (const [url, auth, options] of [
+        [path + suffix, undefined, { headers }],
+        [owned + suffix, token, {}],
+      ] as const) {
+        const result = await request(url, auth, options);
+        expect(result.status).toBe(200);
+        expect(result.headers.get("Cache-Control")).toBe("no-store");
+        const content = await result.text();
+        for (const secret of [data.adminKey, "admin_hash", "owner_id", "owner@example.com"])
+          expect(content).not.toContain(secret);
+        if (!suffix) {
+          expect(result.headers.get("Content-Type")).toBe("text/calendar; charset=utf-8");
+          expect(content).toContain("DTEND:20261101T040000Z");
+        } else {
+          const value = JSON.parse(content);
+          expect(value.providers).toHaveLength(3);
+          expect(value.ics).toBe(url.replace(/-links$/, ""));
+        }
+      }
     }
     expect(snapshot()).toBe(before);
     database.prepare("UPDATE polls SET status='open',selected_slot=NULL WHERE id=?").run(p.id);
-    expect((await request(path)).status).toBe(409);
+    for (const suffix of ["", "-links"]) {
+      expect((await request(path + suffix, undefined, { headers })).status).toBe(409);
+      expect((await request(owned + suffix, token)).status).toBe(409);
+    }
     database.prepare("UPDATE polls SET status='deleted' WHERE id=?").run(p.id);
-    expect((await request(path)).status).toBe(404);
-    expect((await request(`/api/polls/${crypto.randomUUID()}/calendar`)).status).toBe(404);
+    for (const suffix of ["", "-links"]) {
+      expect((await request(path + suffix, undefined, { headers })).status).toBe(404);
+      expect((await request(owned + suffix, token)).status).toBe(404);
+    }
   });
 });
 describe("Cloudflare Access origin boundary with real RSA signed fixtures", () => {
