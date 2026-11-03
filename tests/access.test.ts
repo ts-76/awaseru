@@ -13,6 +13,8 @@ import security from "../middleware/01.security";
 import { loader as pollLoader } from "../pages/p/[id].server";
 import { GET as listRoute } from "../routes/api/create/polls/index";
 import { PATCH as ownerStateRoute, DELETE as deleteRoute } from "../routes/api/create/polls/[id]";
+import { GET as manageRoute } from "../routes/api/create/polls/[id]/manage";
+import { PATCH as ownerManageStateRoute } from "../routes/api/create/polls/[id]/state";
 import { POST as claimRoute } from "../routes/api/create/polls/claim";
 import { SchedulingService } from "../server/service";
 import { hash } from "../server/rules";
@@ -134,6 +136,8 @@ beforeEach(() => {
   app.get("/api/create/polls", handler(listRoute));
   app.patch("/api/create/polls/:id", handler(ownerStateRoute));
   app.delete("/api/create/polls/:id", handler(deleteRoute));
+  app.get("/api/create/polls/:id/manage", handler(manageRoute));
+  app.patch("/api/create/polls/:id/state", handler(ownerManageStateRoute));
   app.post("/api/create/polls/claim", handler(claimRoute));
   app.get("/create/polls", (c) => c.text("my polls"));
   app.get("/p/:id", async (c) => c.json(await pollLoader(c)));
@@ -806,6 +810,81 @@ describe("所有者の締切・再開のHTTP境界", () => {
     database.prepare("UPDATE polls SET status='deleted' WHERE id=?").run(p.id);
     const deleted = snapshot();
     expect((await change(token, { status: "open", revision: 3 })).status).toBe(409);
+    expect(snapshot()).toBe(deleted);
+  });
+});
+
+describe("ログイン所有者の詳細管理", () => {
+  it("所有者だけが確定・再開でき、偽装・候補外・競合・削除を拒否して保存値を保持", async () => {
+    const token = await signed(),
+      other = await signed({ sub: "other" }),
+      input = body();
+    const p = await json(await create(token, {}, input));
+    const path = `/api/create/polls/${p.id}`;
+    const change = (
+      auth: string | undefined = token,
+      data: unknown = { status: "finalized", selectedSlot: input.slots[0], revision: 0 },
+      headers = {},
+    ) =>
+      request(path + "/state", auth, {
+        method: "PATCH",
+        headers: {
+          Origin: "https://scheduler.example",
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        body: JSON.stringify(data),
+      });
+    const before = snapshot();
+    for (const auth of [undefined, other]) {
+      expect((await request(path + "/manage", auth)).status).toBe(auth ? 403 : 401);
+    }
+    expect((await change("")).status).toBe(401);
+    expect((await change(other)).status).toBe(403);
+    expect(
+      (
+        await request(path + "/manage", undefined, {
+          headers: { "Cf-Access-Authenticated-User-Email": "owner@example.com" },
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (await change("", undefined, { Authorization: `Bearer ${input.adminKey}` })).status,
+    ).toBe(401);
+    for (const data of [
+      { status: "finalized", revision: 0 },
+      { status: "finalized", revision: 0, selectedSlot: "outside" },
+      { status: "finalized", revision: 0, selectedSlot: input.slots[0], ownerId: "owner" },
+    ])
+      expect((await change(token, data)).status).toBe(422);
+    expect(
+      (await change(token, { status: "finalized", selectedSlot: input.slots[0], revision: 1 }))
+        .status,
+    ).toBe(409);
+    expect((await change(token, undefined, { Origin: "https://evil.example" })).status).toBe(403);
+    expect((await change(token, undefined, { "Content-Type": "text/plain" })).status).toBe(415);
+    expect(snapshot()).toBe(before);
+    const access = await request(path + "/manage", token);
+    expect(access.headers.get("Cache-Control")).toBe("no-store");
+    expect(await json(access)).toEqual({ id: p.id, canManage: true });
+    const results = await Promise.all([change(), change()]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+    const final = await json(await request(`/api/polls/${p.id}`));
+    expect(final).toMatchObject({ status: "finalized", selectedSlot: input.slots[0], revision: 1 });
+    const finalized = snapshot();
+    expect((await change()).status).toBe(409);
+    expect(snapshot()).toBe(finalized);
+    expect((await request(path + "/manage", token)).status).toBe(200);
+    expect((await change(token, { status: "open", revision: 1 })).status).toBe(200);
+    expect(await json(await request(`/api/polls/${p.id}`))).toMatchObject({
+      status: "open",
+      selectedSlot: null,
+      revision: 2,
+    });
+    database.prepare("UPDATE polls SET status='deleted' WHERE id=?").run(p.id);
+    const deleted = snapshot();
+    expect((await request(path + "/manage", token)).status).toBe(404);
+    expect((await change(token, { status: "closed", revision: 2 })).status).toBe(404);
     expect(snapshot()).toBe(deleted);
   });
 });

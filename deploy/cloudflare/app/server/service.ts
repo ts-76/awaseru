@@ -214,6 +214,40 @@ export class SchedulingService {
       throw new AppError(403, "管理リンクを確認してください。この日程調整は追加できません。");
     return { id: b.id };
   }
+  async manage(id: string) {
+    const owner = this.owner(),
+      p = await this.poll(id);
+    if (p.owner_id !== owner) throw new AppError(403, "この日程調整を管理する権限がありません。");
+    return { id: p.id, canManage: true };
+  }
+  async ownerManageState(id: string, input: unknown) {
+    const owner = this.owner(),
+      b = parse(stateSchema, input);
+    await this.manage(id);
+    const p = await this.poll(id);
+    if (
+      b.status === "finalized" &&
+      (!b.selectedSlot || !JSON.parse(p.slots).includes(b.selectedSlot))
+    )
+      throw new AppError(422, "このイベントの候補を選んでください。");
+    const changed = await this.db
+      .prepare(
+        "UPDATE polls SET status=?,selected_slot=?,revision=revision+1 WHERE id=? AND owner_id=? AND revision=? AND status!='deleted' AND (? != 'finalized' OR EXISTS (SELECT 1 FROM json_each(polls.slots) WHERE value = ?))",
+      )
+      .bind(
+        b.status,
+        b.status === "finalized" ? b.selectedSlot : null,
+        id,
+        owner,
+        b.revision,
+        b.status,
+        b.selectedSlot || "",
+      )
+      .run();
+    if (!changed.meta.changes)
+      throw new AppError(409, "受付状態が変わりました。再読み込みしてください。", "state_changed");
+    return this.get(id);
+  }
   async ownerState(id: string, input: unknown) {
     const owner = this.owner(),
       b = parse(ownerStateSchema, input);

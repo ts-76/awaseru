@@ -30,6 +30,28 @@ export default function PollPage({ id }: Props) {
     [adminMessage, setAdminMessage] = useState(""),
     [adminError, setAdminError] = useState(""),
     [armed, setArmed] = useState<"finalized" | "closed" | null>(null);
+  const [ownerAccess, setOwnerAccess] = useState<{ id: string; revision: number } | null>(null);
+  const isOwner = ownerAccess?.id === id && ownerAccess.revision === poll?.revision;
+  const canManage = !!admin || isOwner;
+  useEffect(() => {
+    let cancelled = false;
+    setOwnerAccess(null);
+    if (!poll || poll.id !== id) return;
+    const revision = poll.revision;
+    void fetch(`/api/create/polls/${id}/manage`, { redirect: "error" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const result = (await response.json()) as { id?: string; canManage?: boolean };
+        if (!cancelled && result.id === id && result.canManage === true)
+          setOwnerAccess({ id, revision });
+      })
+      .catch(() => {
+        /* Participants stay on the public page without a login prompt. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, poll?.revision]);
   const [calendarAccess, setCalendarAccess] = useState<{
     revision: number;
     id: string;
@@ -204,14 +226,14 @@ export default function PollPage({ id }: Props) {
     try {
       setPoll(
         await api<PublicPoll>(
-          `/api/polls/${id}/state`,
+          isOwner ? `/api/create/polls/${id}/state` : `/api/polls/${id}/state`,
           "PATCH",
           {
             status,
             revision: poll.revision,
             ...(status === "finalized" ? { selectedSlot: selected } : {}),
           },
-          admin,
+          isOwner ? undefined : admin,
         ),
       );
       setAdminMessage(
@@ -412,7 +434,7 @@ export default function PollPage({ id }: Props) {
         </div>
       </section>
       <Notice error={error} />
-      <div className={admin ? "bottom-grid" : "bottom-grid solo"}>
+      <div className={canManage ? "bottom-grid" : "bottom-grid solo"}>
         <section className="answer-form" aria-labelledby="answer-heading">
           <h2 id="answer-heading">{editing ? "回答を編集" : "回答する"}</h2>
           {poll.status !== "open" ? (
@@ -520,7 +542,7 @@ export default function PollPage({ id }: Props) {
             </form>
           )}
         </section>
-        {admin && (
+        {canManage && (
           <aside className="admin-panel">
             <h2>主催者の操作</h2>
             <label className="field">
